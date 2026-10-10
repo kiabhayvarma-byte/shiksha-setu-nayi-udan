@@ -104,22 +104,28 @@ if final_prompt:
         recent = st.session_state.messages[-4:]
         context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
 
-        response = client.models.generate_content_stream(
-            model="gemini-2.0-flash",
-            contents=context_text,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                max_output_tokens=150,
-                temperature=0.6
-            )
-        )
-        for chunk in response:
-            if chunk.text:
-                yield chunk.text
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
+        for m_name in models_to_try:
+            try:
+                response = client.models.generate_content_stream(
+                    model=m_name,
+                    contents=context_text,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        max_output_tokens=150,
+                        temperature=0.6
+                    )
+                )
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+                return
+            except Exception as e:
+                if m_name == models_to_try[-1]:
+                    yield f"⚠️ API Error: {str(e)}"
 
     with st.chat_message("assistant"):
         bot_reply = st.write_stream(fast_stream)
-
     # Text aate hi direct speaker bolega
     speak_in_browser(bot_reply)
 
