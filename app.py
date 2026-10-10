@@ -12,7 +12,9 @@ st.set_page_config(
 )
 
 st.title("🚀 शिक्षा सेतु - एक नई उड़ान")
-# --- YEH NAYA CODE LAGAYEIN ---
+st.caption("Ultra-Fast Voice & Chat Study Companion (Powered by Groq)")
+
+# 1. API Key Clean & Safe Verification
 raw_key = st.secrets.get("GROQ_API_KEY", None) or os.environ.get("GROQ_API_KEY", None)
 
 if not raw_key:
@@ -36,7 +38,7 @@ SYSTEM_INSTRUCTION = (
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Browser TTS
+# 2. Browser Audio Output
 def speak_in_browser(text):
     safe_text = json.dumps(text)
     js_code = f"""
@@ -52,7 +54,7 @@ def speak_in_browser(text):
     """
     components.html(js_code, height=0, width=0)
 
-# Quick Topics
+# 3. Quick Topics Buttons
 st.markdown("💡 **Quick Topics:**")
 q1, q2, q3, q4 = st.columns(4)
 btn_prompt = None
@@ -72,10 +74,12 @@ with q4:
 
 st.divider()
 
+# 4. Old Messages Display
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
+# 5. Dual Inputs (Mic + Chat)
 col_mic, col_txt = st.columns([1, 4])
 
 with col_mic:
@@ -87,7 +91,16 @@ with col_mic:
     )
 
 with col_txt:
-  # --- YEH NAYA CODE LAGAYEIN ---
+    text_input = st.chat_input("Ya sawal yahan likhein...")
+
+final_prompt = btn_prompt or voice_input or text_input
+
+# 6. Stream Response
+if final_prompt:
+    st.session_state.messages.append({"role": "user", "content": final_prompt})
+    with st.chat_message("user"):
+        st.write(final_prompt)
+
     def groq_stream():
         messages_payload = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for m in st.session_state.messages[-4:]:
@@ -107,6 +120,7 @@ with col_txt:
                     yield content
         except Exception as e:
             yield f"⚠️ Groq API Error: {str(e)}"
+
     with st.chat_message("assistant"):
         bot_reply = st.write_stream(groq_stream)
 
