@@ -105,7 +105,7 @@ if final_prompt:
         context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
 
         response = client.models.generate_content_stream(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=context_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
