@@ -2,8 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import json
 import os
-from google import genai
-from google.genai import types
+from groq import Groq
 from streamlit_mic_recorder import speech_to_text
 
 st.set_page_config(
@@ -13,30 +12,26 @@ st.set_page_config(
 )
 
 st.title("🚀 शिक्षा सेतु - एक नई उड़ान")
-st.caption("Superfast Voice-to-Voice & Text AI Companion")
+st.caption("Ultra-Fast Voice & Chat Study Companion (Powered by Groq)")
 
-# 1. API Client
-def get_client():
-    api_key = st.secrets.get("GEMINI_API_KEY", None) or os.environ.get("GEMINI_API_KEY", None)
-    if not api_key:
-        st.error("⚠️ GEMINI_API_KEY missing hai! Streamlit Cloud Secrets mein key add karein.")
-        st.stop()
-    return genai.Client(api_key=api_key.strip())
+# Client Initialization
+api_key = st.secrets.get("GROQ_API_KEY", None) or os.environ.get("GROQ_API_KEY", None)
+if not api_key:
+    st.error("⚠️ GROQ_API_KEY missing hai! Streamlit Cloud Secrets mein key add karein.")
+    st.stop()
 
-client = get_client()
+client = Groq(api_key=api_key.strip())
 
-# 2. Fast Audio Persona (Short & Clear)
 SYSTEM_INSTRUCTION = (
     "Aap 'Shiksha Setu - Ek Nayi Udan' AI hain. "
-    "Rule: Aasan bhasha (Hindi/Hinglish) mein sirf 2 se 3 lines ke andar "
-    "seedha jawab dein taaki bolne aur sunne mein bilkul natural aur fast lage. "
-    "Special symbols jaise *, #, ya markdown bullets use na karein."
+    "Aap school/college students ke concepts aasan Hindi/Hinglish mein 2-3 lines mein samjhate hain. "
+    "Jawab to-the-point aur encouraging rakhein. Markdown symbols jaise *, # use na karein."
 )
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 3. Zero-Lag Browser TTS (Seedhe speaker se aawaz niklegi)
+# Browser TTS
 def speak_in_browser(text):
     safe_text = json.dumps(text)
     js_code = f"""
@@ -52,32 +47,30 @@ def speak_in_browser(text):
     """
     components.html(js_code, height=0, width=0)
 
-# 4. Quick Suggestion Buttons
+# Quick Topics
 st.markdown("💡 **Quick Topics:**")
 q1, q2, q3, q4 = st.columns(4)
 btn_prompt = None
 
 with q1:
     if st.button("🔬 Science"):
-        btn_prompt = "Science kya hai aur iske fayde kya hain?"
+        btn_prompt = "Science kya hai aur iska main use kya hai?"
 with q2:
-    if st.button("📐 Maths Trick"):
-        btn_prompt = "Koi aasan maths calculation trick bataiye."
+    if st.button("📐 Maths"):
+        btn_prompt = "Maths calculation ki koi aasan trick bataiye."
 with q3:
-    if st.button("🇮🇳 Chandrayaan"):
-        btn_prompt = "Chandrayaan mission ke bare mein 2 line bataiye."
+    if st.button("🇮🇳 Itihaas"):
+        btn_prompt = "Bharat ke itihas ke bare mein do line bataiye."
 with q4:
-    if st.button("🤖 AI Kya Hai"):
-        btn_prompt = "AI kya hota hai aasan bhasha mein samjhayein."
+    if st.button("🤖 AI"):
+        btn_prompt = "AI kya hota hai aasan shabdo mein samjhayein."
 
 st.divider()
 
-# Purani chat render karein
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# 5. Dual Input: Mic + Text
 col_mic, col_txt = st.columns([1, 4])
 
 with col_mic:
@@ -91,42 +84,32 @@ with col_mic:
 with col_txt:
     text_input = st.chat_input("Ya sawal yahan likhein...")
 
-# Jo bhi input pehle mile
 final_prompt = btn_prompt or voice_input or text_input
 
-# 6. Instant Streaming & Speech Execution
 if final_prompt:
     st.session_state.messages.append({"role": "user", "content": final_prompt})
     with st.chat_message("user"):
         st.write(final_prompt)
 
-    def fast_stream():
-        recent = st.session_state.messages[-4:]
-        context_text = "\n".join([f"{m['role']}: {m['content']}" for m in recent])
+    def groq_stream():
+        messages_payload = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
+        for m in st.session_state.messages[-4:]:
+            messages_payload.append({"role": m["role"], "content": m["content"]})
 
-        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
-        for m_name in models_to_try:
-            try:
-                response = client.models.generate_content_stream(
-                    model=m_name,
-                    contents=context_text,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        max_output_tokens=150,
-                        temperature=0.6
-                    )
-                )
-                for chunk in response:
-                    if chunk.text:
-                        yield chunk.text
-                return
-            except Exception as e:
-                if m_name == models_to_try[-1]:
-                    yield f"⚠️ API Error: {str(e)}"
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages_payload,
+            max_tokens=200,
+            temperature=0.6,
+            stream=True
+        )
+        for chunk in completion:
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content
 
     with st.chat_message("assistant"):
-        bot_reply = st.write_stream(fast_stream)
-    # Text aate hi direct speaker bolega
-    speak_in_browser(bot_reply)
+        bot_reply = st.write_stream(groq_stream)
 
+    speak_in_browser(bot_reply)
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
