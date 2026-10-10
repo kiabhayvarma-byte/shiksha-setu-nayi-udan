@@ -12,15 +12,20 @@ st.set_page_config(
 )
 
 st.title("🚀 शिक्षा सेतु - एक नई उड़ान")
-st.caption("Ultra-Fast Voice & Chat Study Companion (Powered by Groq)")
+# --- YEH NAYA CODE LAGAYEIN ---
+raw_key = st.secrets.get("GROQ_API_KEY", None) or os.environ.get("GROQ_API_KEY", None)
 
-# Client Initialization
-api_key = st.secrets.get("GROQ_API_KEY", None) or os.environ.get("GROQ_API_KEY", None)
-if not api_key:
-    st.error("⚠️ GROQ_API_KEY missing hai! Streamlit Cloud Secrets mein key add karein.")
+if not raw_key:
+    st.error("⚠️ GROQ_API_KEY Secrets me nahi mili! 'Manage app -> Settings -> Secrets' check karein.")
     st.stop()
 
-client = Groq(api_key=api_key.strip())
+api_key = str(raw_key).strip().replace('"', '').replace("'", "")
+
+if not api_key.startswith("gsk_"):
+    st.error(f"⚠️ Invalid Key Format: Key 'gsk_' se shuru honi chahiye. Aapki key '{api_key[:4]}...' se shuru ho rahi hai.")
+    st.stop()
+
+client = Groq(api_key=api_key)
 
 SYSTEM_INSTRUCTION = (
     "Aap 'Shiksha Setu - Ek Nayi Udan' AI hain. "
@@ -82,32 +87,26 @@ with col_mic:
     )
 
 with col_txt:
-    text_input = st.chat_input("Ya sawal yahan likhein...")
-
-final_prompt = btn_prompt or voice_input or text_input
-
-if final_prompt:
-    st.session_state.messages.append({"role": "user", "content": final_prompt})
-    with st.chat_message("user"):
-        st.write(final_prompt)
-
+  # --- YEH NAYA CODE LAGAYEIN ---
     def groq_stream():
         messages_payload = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
         for m in st.session_state.messages[-4:]:
             messages_payload.append({"role": m["role"], "content": m["content"]})
 
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages_payload,
-            max_tokens=200,
-            temperature=0.6,
-            stream=True
-        )
-        for chunk in completion:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
-
+        try:
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages_payload,
+                max_tokens=200,
+                temperature=0.6,
+                stream=True
+            )
+            for chunk in completion:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+        except Exception as e:
+            yield f"⚠️ Groq API Error: {str(e)}"
     with st.chat_message("assistant"):
         bot_reply = st.write_stream(groq_stream)
 
